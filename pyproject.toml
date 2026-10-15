@@ -18,7 +18,7 @@ dependencies = [
     "ruamel-yaml>=0.19.1,<1",
     "jupyter>=1.1.1,<2",
     "ollama>=0.6.1,<1",
-    "chromadb==1.5.5",
+    "chromadb==1.5.9",
     "langchain-chroma>=1.1.0,<1.2",
     "pypdf>=6.9.1,<7",
     "streamlit>=1.55.0,<2",
