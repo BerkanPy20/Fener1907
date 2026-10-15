@@ -1,0 +1,6 @@
+[*]
+charset = utf-8
+insert_final_newline = true
+max_line_length = 160  # widescreen monitor support :)
+
+ij_python_from_import_trailing_comma_if_multiline = true

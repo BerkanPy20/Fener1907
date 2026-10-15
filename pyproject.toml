@@ -1,0 +1,58 @@
+[project]
+name = "chatbot"
+version = "2.2.0"
+description = "Workshop build your own chatbot"
+authors = [
+    { name = "Martin Kovacs", email = "martin-kovacs@web.de" },
+    { name = "Johannes Baumgartl", email = "johannes.baumgartl@hs-esslingen.de" }
+]
+dependencies = [
+    "langchain>=1.2.12,<2",
+    "langchain-openai>=1.1.11,<2",
+    "langchain-community>=0.4.1,<1",
+    "langchain-ollama>=1.0.1,<2",
+    "pydantic>=2.12.5,<3",
+    "pydantic-settings>=2.13.1,<3",
+    "python-dotenv>=1.2.2,<2",
+    "openai>=2.29.0,<3", # needed?
+    "ruamel-yaml>=0.19.1,<1",
+    "jupyter>=1.1.1,<2",
+    "ollama>=0.6.1,<1",
+    "chromadb==1.5.5",
+    "langchain-chroma>=1.1.0,<1.2",
+    "pypdf>=6.9.1,<7",
+    "streamlit>=1.55.0,<2",
+    "debugpy>=1.8.20,<2",
+    "paramiko>=4.0.0,<5",
+]
+readme = "README.md"
+requires-python = ">= 3.11"
+
+[tool.rye]
+managed = true
+universal = true
+virtual = true # for docker, see https://rye.astral.sh/guide/docker/
+dev-dependencies = [
+    "pre-commit>=3.7.1",
+    "pytest>=8.2.2",
+    "pyright>=1.1.370",
+]
+
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff]
+line-length = 160  # widescreen monitor support :)
+target-version = "py311"
+# can be upgraded to 3.12 for e.g. nested quotes in f-strings.
+# That requires all team members to use Python 3.12.
+
+[tool.pytest.ini_options]
+# https://pytest.org/en/7.3.x/explanation/goodpractices.html#which-import-mode
+addopts = ["--import-mode=importlib", ]
+pythonpath = "src"
