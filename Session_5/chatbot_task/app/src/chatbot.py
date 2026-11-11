@@ -210,24 +210,24 @@ Answer based on the excerpts:"""
             str: A string containing the concatenated content of all retrieved documents.
         """
         return "\n\n".join(doc.page_content for doc in docs)
-        
     async def astream(self, question: str):
-        """
-        Handle a user query asynchronously by running the question through the RAG pipeline and stream the answer.
+        self.last_sources = []
 
-        Args:
-            question (str): The user's question as a string.
-
-        Yields:
-            str: The generated answer from the model, streamed chunk by chunk.
-        """
-        logger.info("Streaming RAG chain response.")
         try:
-            async for event in self.qa_rag_chain.astream_events(question, version="v2"):
+            async for event in self.qa_rag_chain.astream_events(
+                question, version="v2"
+            ):
+                if event["event"] == "on_retriever_end":
+                    self.last_sources = event["data"]["output"]
+
                 if event["event"] == "on_chat_model_stream":
                     chunk = event["data"]["chunk"].content
                     if chunk:
                         yield chunk
+
         except Exception as e:
-            logger.error(f"Error in stream_answer: {e}", exc_info=True)
+            logger.error(
+                f"Error in stream_answer: {e}",
+                exc_info=True,
+            )
             raise
