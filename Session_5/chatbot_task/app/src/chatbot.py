@@ -17,6 +17,7 @@ from uuid import uuid4
 from typing import List
 import logging
 import os
+from langchain_core.runnables import RunnableLambda
 
 # Hint: Use these variables in your tasks
 OLLAMA_HOST_NAME = os.environ.get("OLLAMA_HOST_NAME", "localhost")
@@ -75,9 +76,15 @@ class CustomChatBot:
             self._index_data_to_vector_db()
 
         # Task: Initialize the document retriever
-        self.retriever = self.vector_db.as_retriever(
-    search_kwargs={"k": 3}
-)
+        self.retriever = (
+            self.vector_db.as_retriever(
+                search_kwargs={"k": 12}
+            )
+                        | RunnableLambda(self._unique_docs).with_config(
+                run_name="unique_docs"
+            )
+        )
+
 
         # Task: Initialize the large language model (LLM) from Ollama
         self.llm = ChatOllama(
@@ -198,6 +205,20 @@ Answer based on the excerpts:"""
             | self.llm
             | StrOutputParser()
         )
+    def _unique_docs(self, docs):
+        unique_docs = []
+        seen = set()
+
+        for doc in docs:
+            text = doc.page_content.strip()
+            if text and text not in seen:
+                seen.add(text)
+                unique_docs.append(doc)
+
+            if len(unique_docs) == 3:
+                break
+
+        return unique_docs
 
     def _format_docs(self, docs: List[Document]) -> str:
         """
@@ -217,7 +238,10 @@ Answer based on the excerpts:"""
             async for event in self.qa_rag_chain.astream_events(
                 question, version="v2"
             ):
-                if event["event"] == "on_retriever_end":
+                if (
+                    event["event"] == "on_chain_end"
+                    and event["name"] == "unique_docs"
+                ):
                     self.last_sources = event["data"]["output"]
 
                 if event["event"] == "on_chat_model_stream":
