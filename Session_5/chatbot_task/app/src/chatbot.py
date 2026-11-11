@@ -178,22 +178,24 @@ class CustomChatBot:
         """
         logger.info("Initialize rag chain.")
 
-        # Task: Define prompt
-        prompt_template = """Use the retrieved excerpts to answer the question.
-Read all excerpts carefully. A definition in an excerpt is sufficient to answer.
-Answer directly in at most three sentences.
-Only say "I don't know" if the excerpts contain no relevant information.
-
-<retrieved_context>
-{context}
-</retrieved_context>
-
-Question: {question}
-
-Answer based on the excerpts:"""
-
         # Task: Initialize prompt langchain prompt template
-        rag_prompt = ChatPromptTemplate.from_template(prompt_template)
+        rag_prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                "Answer using only exact sentences copied from the retrieved context. "
+                "Select at most three sentences that directly answer the question. "
+                "Keep each sentence unchanged and do not combine parts of sentences. "
+                "Check the heading surrounding each sentence: it must describe "
+                "the concept asked about, not a different concept. "
+                "If no sentence answers the question, reply: "
+                "I don't know based on the provided context."
+            ),
+            (
+                "human",
+                "Retrieved context:\n<context>\n{context}\n</context>\n\n"
+                "Question: {question}"
+            ),
+        ])
 
         # Task: Build the RAG pipeline using the retriever and LLM
         return (
