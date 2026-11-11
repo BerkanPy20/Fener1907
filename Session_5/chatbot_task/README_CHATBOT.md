@@ -286,3 +286,27 @@ docker run -p 5001:5001 --network chatbot_task_app-network --env OLLAMA_HOST_NAM
 
 - If the network is not correct: search for the correct network: `docker network ls` shows all docker networks on this host
 - Add `--env PULL_EMBEDDING_MODEL=1 --env INDEX_DATA=1 --env PDF_DOC_PATH=/app/src/AI_Book.pdf` if the book needs to be indexed
+
+## Tested setup using existing containers
+
+This setup reuses the running containers ollama and chromadb.
+Required models: bge-m3 and llama3.2:3b.
+Required collection: ai_model_book, populated with bge-m3 embeddings.
+
+The network chatbot_task_app-network must exist.
+Connect existing containers once, if not already connected:
+
+    docker network connect chatbot_task_app-network ollama
+    docker network connect --alias session5-chroma chatbot_task_app-network chromadb
+
+From Session_5/chatbot_task, build and start:
+
+    docker compose build chatbot
+    docker compose run --rm --no-deps --service-ports -e CHROMA_HOST_NAME=session5-chroma chatbot
+
+Open http://localhost:5001. Stop with Ctrl+C.
+Rebuild and restart after code changes.
+Avoid starting the full stack alongside the existing containers:
+container names and ports conflict.
+
+Manual test results and limitations: ANSWER_QUALITY_TESTS.md.

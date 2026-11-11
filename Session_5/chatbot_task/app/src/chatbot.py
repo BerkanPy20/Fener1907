@@ -17,6 +17,7 @@ from uuid import uuid4
 from typing import List
 import logging
 import os
+from langchain_core.runnables import RunnableLambda
 
 # Hint: Use these variables in your tasks
 OLLAMA_HOST_NAME = os.environ.get("OLLAMA_HOST_NAME", "localhost")
@@ -58,7 +59,10 @@ class CustomChatBot:
             self._pull_embedding_model()
 
         # Task: initialize the embedding model
-        self.embedding_function = ...
+        self.embedding_function = OllamaEmbeddings(
+    model=EMBEDDING_MODEL,
+    base_url=f"http://{OLLAMA_HOST_NAME}:11434",
+)
 
         # Initialize the ChromaDB client
         self.client = self._initialize_chroma_client()
@@ -72,10 +76,22 @@ class CustomChatBot:
             self._index_data_to_vector_db()
 
         # Task: Initialize the document retriever
-        self.retriever = ...
+        self.retriever = (
+            self.vector_db.as_retriever(
+                search_kwargs={"k": 12}
+            )
+                        | RunnableLambda(self._unique_docs).with_config(
+                run_name="unique_docs"
+            )
+        )
+
 
         # Task: Initialize the large language model (LLM) from Ollama
-        self.llm = ...
+        self.llm = ChatOllama(
+    model=MODEL_NAME,
+    base_url=f"http://{OLLAMA_HOST_NAME}:11434",
+    temperature=0,
+)
 
         # Set up the retrieval-augmented generation (RAG) pipeline
         self.qa_rag_chain = self._initialize_qa_rag_chain()
@@ -98,21 +114,24 @@ class CustomChatBot:
             chromadb.HttpClient: A client used to communicate with ChromaDB.
         """ 
         logger.info("Initialize chroma db client.")
-
-        # Task: Initilaize chromadb http client
-        return ...
-
+        return chromadb.HttpClient(
+            host=CHROMA_HOST_NAME,
+            port=8000,
+            settings=Settings(
+                allow_reset=True,
+                anonymized_telemetry=False,
+            ),
+            tenant=DEFAULT_TENANT,
+            database=DEFAULT_DATABASE,
+        )
     def _initialize_vector_db(self) -> Chroma:
-        """
-        Initialize and return a Chroma vector database using the HTTP client.
-
-        Returns:
-            Chroma: A vector database instance connected to the document collection in ChromaDB.
-        """
         logger.info("Initialize chroma vector db.")
 
-        # Task initialize langchain chromadb object with chromadb http client and embedding function
-        return ...
+        return Chroma(
+            client=self.client,
+            collection_name=COLLECTION_NAME,
+            embedding_function=self.embedding_function,
+        )
 
     def _index_data_to_vector_db(self):
 
@@ -159,14 +178,49 @@ class CustomChatBot:
         """
         logger.info("Initialize rag chain.")
 
-        # Task: Define prompt
-        prompt_template = ...
-
         # Task: Initialize prompt langchain prompt template
-        rag_prompt = ...
+        rag_prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                "Answer using only exact sentences copied from the retrieved context. "
+                "Select at most three sentences that directly answer the question. "
+                "Keep each sentence unchanged and do not combine parts of sentences. "
+                "Check the heading surrounding each sentence: it must describe "
+                "the concept asked about, not a different concept. "
+                "If no sentence answers the question, reply: "
+                "I don't know based on the provided context."
+            ),
+            (
+                "human",
+                "Retrieved context:\n<context>\n{context}\n</context>\n\n"
+                "Question: {question}"
+            ),
+        ])
 
         # Task: Build the RAG pipeline using the retriever and LLM
-        return ...
+        return (
+            {
+                "context": self.retriever | self._format_docs,
+                "question": RunnablePassthrough(),
+            }
+            | rag_prompt
+            | self.llm
+            | StrOutputParser()
+        )
+    def _unique_docs(self, docs):
+        unique_docs = []
+        seen = set()
+
+        for doc in docs:
+            text = doc.page_content.strip()
+            if text and text not in seen:
+                seen.add(text)
+                unique_docs.append(doc)
+
+            if len(unique_docs) == 3:
+                break
+
+        return unique_docs
 
     def _format_docs(self, docs: List[Document]) -> str:
         """
@@ -179,24 +233,27 @@ class CustomChatBot:
             str: A string containing the concatenated content of all retrieved documents.
         """
         return "\n\n".join(doc.page_content for doc in docs)
-        
     async def astream(self, question: str):
-        """
-        Handle a user query asynchronously by running the question through the RAG pipeline and stream the answer.
+        self.last_sources = []
 
-        Args:
-            question (str): The user's question as a string.
-
-        Yields:
-            str: The generated answer from the model, streamed chunk by chunk.
-        """
-        logger.info("Streaming RAG chain response.")
         try:
-            async for event in self.qa_rag_chain.astream_events(question, version="v2"):
-                # Task: Filter stream events to get the text chunk and yield it
-                # Hint: filter for event["event"] == "on_chat_model_stream"
-                chunk = ...
-                yield chunk
+            async for event in self.qa_rag_chain.astream_events(
+                question, version="v2"
+            ):
+                if (
+                    event["event"] == "on_chain_end"
+                    and event["name"] == "unique_docs"
+                ):
+                    self.last_sources = event["data"]["output"]
+
+                if event["event"] == "on_chat_model_stream":
+                    chunk = event["data"]["chunk"].content
+                    if chunk:
+                        yield chunk
+
         except Exception as e:
-            logger.error(f"Error in stream_answer: {e}", exc_info=True)
+            logger.error(
+                f"Error in stream_answer: {e}",
+                exc_info=True,
+            )
             raise

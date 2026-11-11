@@ -7,6 +7,7 @@ from dataclasses import dataclass
 class ChatMessage:
     role: str
     content: str
+    sources: list | None = None
 from src.chatbot import CustomChatBot
 import os
 
@@ -41,8 +42,34 @@ if len(st.session_state["messages"]) == 0 or st.sidebar.button("Clear message hi
     st.session_state["messages"] = [ChatMessage(role="assistant", content="How can I help you?")]
 
 # Display chat messages
+def show_sources(sources):
+    if not sources:
+        return
+
+    with st.expander("Quellen anzeigen"):
+        for i, doc in enumerate(sources, 1):
+            metadata = doc.metadata or {}
+            source = str(metadata.get("source") or "Unbekannte Quelle")
+            filename = source.replace("\\", "/").split("/")[-1]
+
+            page = metadata.get("page_label")
+            if page is None:
+                page_index = metadata.get("page")
+                if isinstance(page_index, int):
+                    page = page_index + 1
+
+            title = f"Quelle {i}: {filename}"
+            if page is not None:
+                title += f" – Seite {page}"
+
+            st.write(title)
+            st.text(doc.page_content)
+
+
 for msg in st.session_state.messages:
-    st.chat_message(msg.role).write(msg.content)
+    with st.chat_message(msg.role):
+        st.write(msg.content)
+        show_sources(msg.sources)
 
 # Handle user input
 if user_query := st.chat_input(placeholder="Ask me anything!"):
@@ -64,8 +91,19 @@ if user_query := st.chat_input(placeholder="Ask me anything!"):
 
         # Store assistant response in session state
         if answer:
-            logger.info(f"Write assistant message in session state {user_query}")
-            st.session_state.messages.append(ChatMessage(role="assistant", content=answer))
+            sources = list(
+                getattr(st.session_state["bot"], "last_sources", [])
+            )
+
+            st.session_state.messages.append(
+                ChatMessage(
+                    role="assistant",
+                    content=answer,
+                    sources=sources,
+                )
+            )
+
+            show_sources(sources)
 
     with st.chat_message("assistant"):
         with st.spinner("Searching for information in your documents and generation response..."):
